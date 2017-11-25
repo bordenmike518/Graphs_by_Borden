@@ -13,8 +13,7 @@
 # ============================================================================
 
 import wx
-import wx.grid as gridlib
-import operator
+from random import sample
 from numpy import zeros
 from copy import deepcopy
 from math import sin, cos, radians
@@ -50,8 +49,8 @@ class widgetFrame(wx.Frame):
         self.vertices_list = []
         self.down = False
         self.draw = False
-        error_title_label = "ERROR - ERROR - ERROR - ERROR - ERROR"
-        error_body_label = '''
+        self.error_title_label = "ERROR - ERROR - ERROR - ERROR - ERROR"
+        self.error_body_label = '''
  ----------------------------------------------------
  
  The sumation of edges are odd or in violation of one
@@ -72,9 +71,11 @@ class widgetFrame(wx.Frame):
                 or :: 3 3 3 3
                 or :: 4 4 3 2 2 2 2 1
 '''
+        self.InitUI(parent=parent, id=id, title=title)
 # ----------------------------------------------------------------------------
         
 # DESIGN ---------------------------------------------------------------------
+    def InitUI(self, parent, id, title):
         wx.Frame.__init__(self, parent, id, title, size=self.panel_size)
         self.panel = wx.Panel(self, wx.ID_ANY)
         self.label1 = wx.StaticText(self.panel, label="Input List of Edges", pos=(10,5))
@@ -91,25 +92,27 @@ class widgetFrame(wx.Frame):
         self.radio2 = wx.RadioButton(self.panel, label="Lowercase Letters (abc)", pos=(10,135))
         self.radio3 = wx.RadioButton(self.panel, label="Integers (123)", pos=(10,165))
         
-        self.error_title = wx.StaticText(self.panel, wx.ID_ANY, label=error_title_label, pos=(85, 400))
+        self.error_title = wx.StaticText(self.panel, wx.ID_ANY, label=self.error_title_label, pos=(85, 400))
         self.error_title.SetForegroundColour((255,0,0))
         self.error_title_font = wx.Font(18, wx.MODERN, wx.NORMAL, wx.BOLD)
         self.error_title.SetFont(self.error_title_font)
         self.error_title.Hide()
         
-        self.error_body = wx.StaticText(self.panel, wx.ID_ANY, label=error_body_label, pos=(35, 450))
+        self.error_body = wx.StaticText(self.panel, wx.ID_ANY, label=self.error_body_label, pos=(35, 450))
         self.error_body_font = wx.Font(14, wx.MODERN, wx.NORMAL, wx.NORMAL)
         self.error_body.SetFont(self.error_body_font)
         self.error_body.Hide()
         
-        self.adjacecy_matrix_text = wx.StaticText(self.panel, label="", pos=(10,1000))
+        self.adjacency_matrix_text = wx.StaticText(self.panel,label="",pos=(10,1000),style=wx.TE_MULTILINE)
+        self.adjacency_matrix_text.SetForegroundColour((0,0,0))
         self.adjacecy_matrix_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.NORMAL)
-        self.adjacecy_matrix_text.SetFont(self.adjacecy_matrix_font)
-        self.adjacecy_matrix_text.Hide()
+        self.adjacency_matrix_text.SetFont(self.adjacecy_matrix_font)
+        self.adjacency_matrix_text.Hide()
         
         self.Bind(wx.EVT_TEXT_ENTER, self.onEnter, self.text) 
         self.Bind(wx.EVT_TEXT_ENTER, self.onDrawEdges)
         self.Bind(wx.EVT_RADIOBUTTON, self.onRadioButton)
+        #self.panel.Bind(wx.EVT_MOTION, self.onMove)
         self.panel.Bind(wx.EVT_PAINT, self.onDrawEdges)
 
         self.Centre()
@@ -129,22 +132,22 @@ class widgetFrame(wx.Frame):
         if first == 0:                      # Observation I
             self.error_title.Hide()
             self.error_body.Hide()
-            self.adjacecy_matrix_text.Show()
+            self.adjacency_matrix_text.Show()
             return True
         elif first >= self.n:               # Observation II
             self.error_title.Show()
             self.error_body.Show()
-            self.adjacecy_matrix_text.Hide()
+            self.adjacency_matrix_text.Hide()
             return False
         elif s[first] == 0:                 # Observation III
             self.error_title.Show()
             self.error_body.Show()
-            self.adjacecy_matrix_text.Hide()
+            self.adjacency_matrix_text.Hide()
             return False
         elif sum(s) % 2 == 1:               # Sum(di) != 0 ; for i in range(n)
             self.error_title.Show()
             self.error_body.Show()
-            self.adjacecy_matrix_text.Hide()
+            self.adjacency_matrix_text.Hide()
             return False
         else:
             s = self.func(s)
@@ -183,6 +186,7 @@ class widgetFrame(wx.Frame):
         v_list = []
         for v in self.vertices_list:
             v_list.append(v)
+        v_list = sample(v_list, len(v_list))
         v_list = sorted(v_list, key=lambda v: v.edges, reverse=True)
         vlist = []
         for vx in v_list:
@@ -198,35 +202,40 @@ class widgetFrame(wx.Frame):
             for e in range(edges):
                 button[0].adjacency_list.append(v_list[e])
                 v_list[e].edges -= 1
+            v_list = sample(v_list, len(v_list))
             v_list = sorted(v_list, key=lambda v: v.edges, reverse=True)
             vlist = []
             for vx in v_list:
                 vlist.append(str("%i%c" % (vx.edges, vx.label)))
             print vlist
 
-    def buildAdjacencyMatrix(self):
-        sz = len(self.vertices_list) + 1
+    def buildAdjacencyMatrix(self, adjacency_matrix):
+        n = len(self.vertices_list)
         adj_matrix_txt = []
-        for i in range(sz):
-            for j in range(sz):
-                if i == 0 and i == 0:
+        sz = n + 2
+        print "len(self.vertices_list) = ", sz
+        for x in range(sz):
+            for y in range(sz-1):
+                if x == 0 and x == 0:
                     pass
-                elif i == 0:
+                elif x == 0 and x > 0 and y < sz+1:
                     adj_matrix_txt.append(" ")
-                    adj_matrix_txt.append(str(self.vertices_list[j].button.GetLabel()))
-                elif j == 0:
+                    adj_matrix_txt.append(str(self.vertices_list[y-2].button.GetLabel()))
+                elif y == 0 and y > 0 and x < sz+1:
                     adj_matrix_txt.append(" ")
-                    adj_matrix_txt.append(str(self.vertices_list[i].button.GetLabel()))
-                elif j == sz or j == sz:
+                    adj_matrix_txt.append(str(self.vertices_list[x-2].button.GetLabel()))
+                elif x == sz-1 or y == sz-1:
                     adj_matrix_txt.append("\n")
-                else:
+                elif x < sz+1 and y < sz+1:
                     adj_matrix_txt.append(" ")
-                    adj_matrix_txt.append(str(self.adjacency_matrix[i][j]))
+                    adj_matrix_txt.append(str(adjacency_matrix[2-1][y-2]))
+                else:
+                    print "ERROR ERROR, WHAT SHALL WE DO!!"
         print "adj_matrix_txt"
         adj_matrix_txt = ''.join(adj_matrix_txt)
         print adj_matrix_txt
-        self.adjacecy_matrix_text.SetLabel(adj_matrix_txt)
-        self.adjacecy_matrix_text.Show()
+        self.adjacency_matrix_text.SetLabel(adj_matrix_txt)
+        self.adjacency_matrix_text.Show()
         
             
 # ----------------------------------------------------------------------------
@@ -246,6 +255,8 @@ class widgetFrame(wx.Frame):
             self.placeVertices()
             self.printVerticesPos()
         self.Refresh()
+        #if self.Graphic(arr):   # Ugly Need to fix, ewww
+        #    self.buildAdjacencyMatrix(self.adjacency_matrix)
     
     def onDrawEdges(self, event): 
         if self.draw:
@@ -260,11 +271,9 @@ class widgetFrame(wx.Frame):
                 for v2, vertex2 in enumerate(self.vertices_list[v1].adjacency_list):
                     v2_x, v2_y = vertex2.getPosition()
                     print "-- ", vertex2.button.GetLabel()
-                    self.dc.DrawLine(v1_x+25, v1_y+25, v2_x+25, v2_y+25)
                     self.adjacency_matrix[v1][v2] = 1
                     self.adjacency_matrix[v2][v1] = 1
-            #for i in range(length):
-            #    print self.adjacency_matrix[i]
+                    self.dc.DrawLine(v1_x+25, v1_y+25, v2_x+25, v2_y+25)
         event.Skip()
     
     def onRadioButton(self, event):
@@ -300,6 +309,7 @@ class widgetFrame(wx.Frame):
         if self.down:
             x, y = wx.GetMousePosition()
             button = event.GetEventObject()
+            print "event.GetEventObject() = ", event.GetEventObject() 
             lbl = button.GetLabel()
             v_button = [v for v in self.vertices_list if v.label == lbl]
             print("%i, %i" % (self.button._x+x, self.button._y+y))
