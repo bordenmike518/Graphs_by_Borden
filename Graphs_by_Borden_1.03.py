@@ -1,7 +1,7 @@
 # ============================================================================
 # Author      :: Michael Borden
 # Created     :: Nov 19, 2017
-# Last Update :: Nov 21, 2017
+# Last Update :: Nov 25, 2017
 # 
 # Porpose     :: This is an attempt to visualize Graphs with interactive
 #                Vertices and dynamic edges. 
@@ -13,20 +13,45 @@
 # ============================================================================
 
 import wx
+import wx.grid as gridlib
+import operator
+from numpy import zeros
 from copy import deepcopy
 from math import sin, cos, radians
 
-# INITIALIZATION -------------------------------------------------------------
+# VERTICES --------------------------------------------------------------------
+class Vertex:
+    def __init__(self, parent, edges, label, pos):
+        self.edges = edges
+        self.label = label
+        self.adjacency_list = []
+        self.pos = pos
+        self.button = wx.Button(parent=parent, 
+                                id=-1, 
+                                label=self.label, 
+                                pos=self.pos, 
+                                size=(50, 50))
+        
+    def getPosition(self):
+        px, py = self.button.GetPositionTuple()
+        self.pos = [px, py]
+        return px, py
+
+    def destroyButton(self):
+        self.button.Destroy()
+# -----------------------------------------------------------------------------
+
+# GUI -------------------------------------------------------------------------
 class widgetFrame(wx.Frame):
     def __init__(self, parent, id, title):
-        self.panel_size = (1000, 1000)
-        self.k = 400.0   # Temp
-        self.vertex_list = []
+        self.panel_size = (1000, 1500)
+        self.k = 300.0   # Temp
         self.vertex_array = []
+        self.vertices_list = []
         self.down = False
         self.draw = False
-        error_title = "ERROR - ERROR - ERROR - ERROR - ERROR"
-        error_body = '''
+        error_title_label = "ERROR - ERROR - ERROR - ERROR - ERROR"
+        error_body_label = '''
  ----------------------------------------------------
  
  The sumation of edges are odd or in violation of one
@@ -51,23 +76,40 @@ class widgetFrame(wx.Frame):
         
 # DESIGN ---------------------------------------------------------------------
         wx.Frame.__init__(self, parent, id, title, size=self.panel_size)
-        self.panel = wx.Panel(self, wx.ID_ANY)        
-        self.panel.Bind(wx.EVT_MOTION, self.onMove)
-        self.label = wx.StaticText(self.panel, label="Input ::", pos=(10,25), size=(90, -1))
-        self.error_title = wx.StaticText(self.panel, wx.ID_ANY, label=error_title, pos=(85, 100))
+        self.panel = wx.Panel(self, wx.ID_ANY)
+        self.label1 = wx.StaticText(self.panel, label="Input List of Edges", pos=(10,5))
+        self.label1_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.BOLD)
+        self.label1.SetFont(self.label1_font)
+        self.text = wx.TextCtrl(self.panel, style=wx.TE_PROCESS_ENTER, pos=(10, 35), size=(275,- 1))
+        self.text.SetFocus()
+        
+        self.label2 = wx.StaticText(self.panel, label="Vertex Label Options", pos=(10,75))
+        self.label2_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.BOLD)
+        self.label2.SetFont(self.label2_font)
+        
+        self.radio1 = wx.RadioButton(self.panel, label="Uppercase Letters (ABC)", pos=(10,105))
+        self.radio2 = wx.RadioButton(self.panel, label="Lowercase Letters (abc)", pos=(10,135))
+        self.radio3 = wx.RadioButton(self.panel, label="Integers (123)", pos=(10,165))
+        
+        self.error_title = wx.StaticText(self.panel, wx.ID_ANY, label=error_title_label, pos=(85, 400))
         self.error_title.SetForegroundColour((255,0,0))
         self.error_title_font = wx.Font(18, wx.MODERN, wx.NORMAL, wx.BOLD)
         self.error_title.SetFont(self.error_title_font)
         self.error_title.Hide()
-        self.error_body = wx.StaticText(self.panel, wx.ID_ANY, label=error_body, pos=(35, 150))
+        
+        self.error_body = wx.StaticText(self.panel, wx.ID_ANY, label=error_body_label, pos=(35, 450))
         self.error_body_font = wx.Font(14, wx.MODERN, wx.NORMAL, wx.NORMAL)
         self.error_body.SetFont(self.error_body_font)
         self.error_body.Hide()
-        self.text = wx.TextCtrl(self.panel, style=wx.TE_PROCESS_ENTER, pos=(100, 20), size=(300,- 1))
-        self.text.SetFocus()
-        self.topSizer = wx.BoxSizer(wx.VERTICAL)
+        
+        self.adjacecy_matrix_text = wx.StaticText(self.panel, label="", pos=(10,1000))
+        self.adjacecy_matrix_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.NORMAL)
+        self.adjacecy_matrix_text.SetFont(self.adjacecy_matrix_font)
+        self.adjacecy_matrix_text.Hide()
+        
         self.Bind(wx.EVT_TEXT_ENTER, self.onEnter, self.text) 
         self.Bind(wx.EVT_TEXT_ENTER, self.onDrawEdges)
+        self.Bind(wx.EVT_RADIOBUTTON, self.onRadioButton)
         self.panel.Bind(wx.EVT_PAINT, self.onDrawEdges)
 
         self.Centre()
@@ -87,18 +129,22 @@ class widgetFrame(wx.Frame):
         if first == 0:                      # Observation I
             self.error_title.Hide()
             self.error_body.Hide()
+            self.adjacecy_matrix_text.Show()
             return True
         elif first >= self.n:               # Observation II
             self.error_title.Show()
             self.error_body.Show()
+            self.adjacecy_matrix_text.Hide()
             return False
         elif s[first] == 0:                 # Observation III
             self.error_title.Show()
             self.error_body.Show()
+            self.adjacecy_matrix_text.Hide()
             return False
         elif sum(s) % 2 == 1:               # Sum(di) != 0 ; for i in range(n)
             self.error_title.Show()
             self.error_body.Show()
+            self.adjacecy_matrix_text.Hide()
             return False
         else:
             s = self.func(s)
@@ -107,77 +153,99 @@ class widgetFrame(wx.Frame):
 
 # ASSISTING FUNCTIONS --------------------------------------------------------------
     def destroyButtons(self):
-        if len(self.vertex_list) > 0:
-            for button in self.vertex_list:
-                button.Destroy()
+        if len(self.vertices_list) > 0:
+            for vertex in self.vertices_list:
+                vertex.destroyButton()
 
     def placeVertices(self):
-        size = (50, 50)
-        offset = -35
         for i in range(self.n):
+            if self.radio1.GetValue():
+                v_lbl = chr(65+i)
+            if self.radio2.GetValue():
+                v_lbl = chr(97+i)
+            if self.radio3.GetValue():
+                v_lbl = str(i)
             theta = -(radians((360.0/self.n)*i))
-            x = (0.0)*cos(theta)-(self.k)*sin(theta)+(self.panel_size[0]/2.0)+offset
-            y = -((self.k)*cos(theta)+(0.0)*sin(theta))+(self.panel_size[1]/2.0)
-            self.vertex_list.append(wx.Button(parent=self.panel, 
-                                              id=-1, 
-                                              label=chr(65+i), 
-                                              pos=(x, y), 
-                                              size=size))
-            self.vertex_list[i].Bind(wx.EVT_BUTTON, self.onButton)
-            self.vertex_list[i].Bind(wx.EVT_MOTION, self.onMove)
+            x = (0.0)*cos(theta)-(self.k)*sin(theta)+(500)-35
+            y = -((self.k)*cos(theta)+(0.0)*sin(theta))+(500)
+            vertex = Vertex(parent=self.panel, edges=self.vertex_array[i], label=v_lbl, pos=[x,y])
+            vertex.button.Bind(wx.EVT_BUTTON, self.onButton)
+            vertex.button.Bind(wx.EVT_MOTION, self.onMove)
+            self.vertices_list.append(vertex)
+        self.createAdjacencyList()
  
     def printVerticesPos(self):
-        for vertex in self.vertex_list:
-            x, y = vertex.GetPositionTuple()
-            print ("Vertex %s at pos (%i, %i)" % (vertex.GetLabel(), int(x), int(y)))
+        for vertex in self.vertices_list:
+            x, y = vertex.getPosition()
+            print ("Vertex %s at pos (%i,%i)"%(vertex.button.GetLabel(),int(x),int(y)))
             
-    def Skip(self, edges, length, skip, vertex_array):
-        v_arr = deepcopy(vertex_array)
-        count = 0
-        pos_index = 0
-        j = 0
-        s = False
-        while s == False and skip > 0:
-            while j < length:
-                if v_arr[j] == 0:
-                    pos_index += 1
-                if j == pos_index and count < edges and v_arr[j] != 0:
-                    pos_index += skip
-                    count += 1
-                    v_arr[j] -= 1
-                j += 1
-            if count == edges:
-                s = True
-            else:
-                skip -= 1
-        if count == edges:
-            return skip
-        else:
-            return 1
-    
-    def getSkip(self, edges, length, vertex_array):
-        if edges == 0 or length == 0:
-            return 1
-        else:
-            return self.Skip(edges, length, length/edges, vertex_array)
+    def createAdjacencyList(self):
+        v_list = []
+        for v in self.vertices_list:
+            v_list.append(v)
+        v_list = sorted(v_list, key=lambda v: v.edges, reverse=True)
+        vlist = []
+        for vx in v_list:
+            vlist.append(str("%i%c" % (vx.edges, vx.label)))
+        print vlist
+        length = len(self.vertices_list)
+        for i in range(length):
+            edges = v_list[0].edges
+            lbl = v_list[0].label
+            button = [v for v in self.vertices_list if v.label == lbl]
+            del v_list[0]
+            length = len(v_list)
+            for e in range(edges):
+                button[0].adjacency_list.append(v_list[e])
+                v_list[e].edges -= 1
+            v_list = sorted(v_list, key=lambda v: v.edges, reverse=True)
+            vlist = []
+            for vx in v_list:
+                vlist.append(str("%i%c" % (vx.edges, vx.label)))
+            print vlist
+
+    def buildAdjacencyMatrix(self):
+        sz = len(self.vertices_list) + 1
+        adj_matrix_txt = []
+        for i in range(sz):
+            for j in range(sz):
+                if i == 0 and i == 0:
+                    pass
+                elif i == 0:
+                    adj_matrix_txt.append(" ")
+                    adj_matrix_txt.append(str(self.vertices_list[j].button.GetLabel()))
+                elif j == 0:
+                    adj_matrix_txt.append(" ")
+                    adj_matrix_txt.append(str(self.vertices_list[i].button.GetLabel()))
+                elif j == sz or j == sz:
+                    adj_matrix_txt.append("\n")
+                else:
+                    adj_matrix_txt.append(" ")
+                    adj_matrix_txt.append(str(self.adjacency_matrix[i][j]))
+        print "adj_matrix_txt"
+        adj_matrix_txt = ''.join(adj_matrix_txt)
+        print adj_matrix_txt
+        self.adjacecy_matrix_text.SetLabel(adj_matrix_txt)
+        self.adjacecy_matrix_text.Show()
+        
             
 # ----------------------------------------------------------------------------
 
 # EVENTS ---------------------------------------------------------------------
     def onEnter(self, event):
         self.destroyButtons()
-        self.vertex_list = []
         self.vertex_array = []
+        self.vertices_list = []
         self.draw = True
         self.input_text = self.text.GetValue()
         self.vertex_array = map(int, self.input_text.split())
         self.n = len(self.vertex_array)
+        self.adjacency_matrix = list(zeros(shape=(self.n,self.n),dtype=int))
         arr = deepcopy(self.vertex_array)
         if self.Graphic(arr):   # GRAPHIC /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\
             self.placeVertices()
             self.printVerticesPos()
         self.Refresh()
-        
     
     def onDrawEdges(self, event): 
         if self.draw:
@@ -185,38 +253,42 @@ class widgetFrame(wx.Frame):
             self.dc.Clear()
             black_pen = wx.Pen(wx.Colour(0,0,0), 3) 
             self.dc.SetPen(black_pen)
-            v_array = deepcopy(self.vertex_array)
-            print v_array
-            length = len(v_array)
-            for i, vertex1 in enumerate(self.vertex_list):
-                v1_x, v1_y = vertex1.GetPositionTuple()
-                edges = v_array[i]
-                v_array[i] = 0
-                v1_label = vertex1.GetLabel()
-                count = 0
-                pos_index = 0
-                skip = self.getSkip(edges, length-i, v_array)
-                for j, vertex2 in enumerate(self.vertex_list):
-                    v2_label = vertex2.GetLabel()
-                    if v_array[j] == 0:
-                        pos_index += 1
-                    print (j, " == ", pos_index, " and ", count, " < ", edges, " and ", v_array[j], " != 0")
-                    if j == pos_index and count < edges and v_array[j] != 0:
-                        pos_index += skip
-                        count += 1
-                        v_array[j] -= 1
-                        v2_x, v2_y = vertex2.GetPositionTuple()
-                        self.dc.DrawLine(v1_x+25, v1_y+25, v2_x+25, v2_y+25)
-                print v_array
+            length = len(self.vertices_list)
+            for v1, vertex1 in enumerate(self.vertices_list):
+                v1_x, v1_y = vertex1.getPosition()
+                print vertex1.button.GetLabel()
+                for v2, vertex2 in enumerate(self.vertices_list[v1].adjacency_list):
+                    v2_x, v2_y = vertex2.getPosition()
+                    print "-- ", vertex2.button.GetLabel()
+                    self.dc.DrawLine(v1_x+25, v1_y+25, v2_x+25, v2_y+25)
+                    self.adjacency_matrix[v1][v2] = 1
+                    self.adjacency_matrix[v2][v1] = 1
+            #for i in range(length):
+            #    print self.adjacency_matrix[i]
         event.Skip()
+    
+    def onRadioButton(self, event):
+        for i, vertex in enumerate(self.vertices_list):
+            if self.radio1.GetValue():
+                v_lbl = chr(65+i)
+            if self.radio2.GetValue():
+                v_lbl = chr(97+i)
+            if self.radio3.GetValue():
+                v_lbl = str(i)
+            vertex.button.SetLabel(v_lbl)
+            vertex.label = v_lbl
 
     def onButton(self, event):
         print("Click")
-        self.cur_vertex = event.GetEventObject()
-        sx,sy = self.cur_vertex.GetPositionTuple()
+        self.button = event.GetEventObject()
+        sx,sy = self.button.GetPositionTuple()
         dx,dy = wx.GetMousePosition()
-        self.cur_vertex._x, self.cur_vertex._y   = (sx-dx, sy-dy)
-        if self.down == True:
+        lbl = self.button.GetLabel()
+        v_button = [v for v in self.vertices_list if v.label == lbl]
+        v_button[0].pos[0] = sx-dx
+        v_button[0].pos[1] = sy-dy
+        self.button._x, self.button._y = (sx-dx, sy-dy)
+        if self.down:
             self.down = False
             print("Down is False")
         else:
@@ -227,8 +299,11 @@ class widgetFrame(wx.Frame):
     def onMove(self, event):
         if self.down:
             x, y = wx.GetMousePosition()
-            print("%i, %i" % (x+self.cur_vertex._x, y+self.cur_vertex._y))
-            self.cur_vertex.SetPosition(wx.Point(x+self.cur_vertex._x,y+self.cur_vertex._y))
+            button = event.GetEventObject()
+            lbl = button.GetLabel()
+            v_button = [v for v in self.vertices_list if v.label == lbl]
+            print("%i, %i" % (self.button._x+x, self.button._y+y))
+            button.SetPosition(wx.Point(self.button._x+x, self.button._y+y))
             self.Refresh()  # Triggers EVT_PAINT on panel
         event.Skip()
 # ----------------------------------------------------------------------------
