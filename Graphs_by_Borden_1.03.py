@@ -9,7 +9,7 @@
 # Directions  :: In the textbox you can enter a list of edges per vertex 
 #                seperated by any delimiter.
 #
-# Example     :: 2 2 2 or 3 3 3 3 or 4 4 3 2 2 2 2 1 or 1 1
+# Example     :: 1 1  or 2 2 2 or 3 3 3 3 or 4 4 3 2 2 2 2 1 or Petersen Graph
 # ==============================================================================
 
 import wx
@@ -28,7 +28,7 @@ class Vertex:
                               id=-1, 
                               label=self.label, 
                               pos=self.pos, 
-                              size=(50, 50))
+                              size=(60, 50))
         self.button.SetBackgroundColour(wx.Colour(0,0,0))
         self.button.SetForegroundColour(wx.Colour(255,255,255))
         self.button_font = wx.Font(20, wx.MODERN, wx.NORMAL, wx.BOLD)
@@ -103,9 +103,9 @@ class PlotPanel(wx.Panel):
         self.label3 = wx.StaticText(self, label="Redrawing Graph", pos=(10,205))
         self.label3_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.BOLD)
         self.label3.SetFont(self.label3_font)
-        self.radio4 = wx.RadioButton(self, label="Keep Position", pos=(10,235),
+        self.radio4 = wx.RadioButton(self, label="Keep Layout", pos=(10,235),
                                            style=wx.RB_GROUP)
-        self.radio5 = wx.RadioButton(self, label="Reset Position", pos=(10,265))
+        self.radio5 = wx.RadioButton(self, label="Reset Layout", pos=(10,265))
         
         self.error_title = wx.StaticText(self, wx.ID_ANY, 
                                          label=self.error_title_label, 
@@ -124,10 +124,10 @@ class PlotPanel(wx.Panel):
         
         self.Bind(wx.EVT_TEXT_ENTER, self.onEnter, self.text) 
         self.Bind(wx.EVT_TEXT_ENTER, self.onDrawEdges)
-        #self.Bind(wx.EVT_MOTION, self.onDrawEdges)
         self.Bind(wx.EVT_RADIOBUTTON, self.onRadioButton)
         self.Bind(wx.EVT_MOTION, self.onMove)
         self.Bind(wx.EVT_PAINT, self.onDrawEdges)
+        #self.Bind(wx.EVT_MOTION, self.onDrawEdges)
 
         self.Show(True)
 # ------------------------------------------------------------------------------
@@ -167,18 +167,25 @@ class PlotPanel(wx.Panel):
 # ASSISTING FUNCTIONS ----------------------------------------------------------
     def destroyButtons(self):
         if len(self.vertices_list) > 0:
-            for vertex in self.vertices_list:
-                vertex.destroyButton()
+            [vertex.destroyButton() for vertex in self.vertices_list]
+                
 
     def labelMaker(self, i):
         if self.radio1.GetValue():
-            v_lbl = chr(65+i)
+            if i >= 26:
+                df = i-26
+                v_lbl = ''.join([chr(65+i/26-1), chr(65+i%26)])
+            else:
+                v_lbl = chr(65+i)
         if self.radio2.GetValue():
-            v_lbl = chr(97+i)
+            if i >= 26:
+                df = i-26
+                v_lbl = ''.join([chr(65+i/26-1), chr(65+i%26)])
+            else:
+                v_lbl = chr(97+i)
         if self.radio3.GetValue():
             v_lbl = str(i)
         return v_lbl
-        
 
     def placeVertices(self):
         for i in range(self.n):
@@ -205,8 +212,7 @@ class PlotPanel(wx.Panel):
      
     def print_v_list(self, v_list):
         vlist = []
-        for vx in v_list:
-            vlist.append(str("%i%c" % (vx.edges, vx.label)))
+        [vlist.append(str("%s%s"%(str(v.edges),str(v.label)))) for v in v_list]
         print vlist
     
     def createAdjacencyList(self):
@@ -252,8 +258,9 @@ class PlotPanel(wx.Panel):
             self.createAdjacencyList()
         self.Refresh()
     
-    def onDrawEdges(self, event): 
-        if self.draw:
+    def onDrawEdges(self, event):
+        button = event.GetEventObject()
+        if self.draw and len(button.GetLabel()) < 4:
             self.dc = wx.PaintDC(event.GetEventObject())
             self.dc.Clear()
             black_pen = wx.Pen(wx.Colour(0,0,0), 3) 
@@ -264,7 +271,7 @@ class PlotPanel(wx.Panel):
                 for vertex2 in self.vertices_list[v1].adjacency_list:
                     v2_x, v2_y = vertex2.getPosition()
                     print "-- ", vertex2.button.GetLabel()
-                    self.dc.DrawLine(v1_x+25, v1_y+25, v2_x+25, v2_y+25)
+                    self.dc.DrawLine(v1_x+30, v1_y+25, v2_x+30, v2_y+25)
         event.Skip()
     
     def onRadioButton(self, event):
@@ -276,13 +283,10 @@ class PlotPanel(wx.Panel):
     def onButton(self, event):
         print("Click")
         self.button = event.GetEventObject()
-        sx,sy = self.button.GetPositionTuple()
-        dx,dy = wx.GetMousePosition()
-        self.button_label = self.button.GetLabel()
-        v_button = [v for v in self.vertices_list if v.label == self.button_label]
-        v_button[0].pos[0] = sx-dx
-        v_button[0].pos[1] = sy-dy
-        self.button._x, self.button._y = (sx-dx, sy-dy)
+        bx, by = self.button.GetPositionTuple()
+        mx, my = wx.GetMousePosition()
+        self.clicked_button = self.button.GetLabel()
+        self.button._x, self.button._y = (bx-mx, by-my)
         if self.down:
             self.down = False
             print("Down is False")
@@ -295,11 +299,18 @@ class PlotPanel(wx.Panel):
         if self.down:
             button = event.GetEventObject()
             lbl = button.GetLabel()
-            if lbl == self.button_label:
-                x, y = wx.GetMousePosition()
-                v_button = [v for v in self.vertices_list if v.label == lbl]
-                print("%i, %i" % (self.button._x+x, self.button._y+y))
-                button.SetPosition(wx.Point(self.button._x+x, self.button._y+y))
+            if lbl == self.clicked_button and len(lbl) < 4:
+                mx, my = wx.GetMousePosition()
+                print("%i, %i" % (self.button._x+mx, self.button._y+my))
+                button.SetPosition(wx.Point(self.button._x+mx, self.button._y+my))
+                self.Refresh()  # Triggers EVT_PAINT on panel
+            else:
+                v_btn = [v for v in self.vertices_list if v.button.GetLabel() == self.clicked_button]
+                print "vbtn = ", v_btn[0].button.GetLabel()
+                vbtn = v_btn[0]
+                mx, my = wx.GetMousePosition()
+                print("%i, %i" % (vbtn.button._x+mx, vbtn.button._y+my))
+                vbtn.button.SetPosition(wx.Point(vbtn.button._x+mx, vbtn.button._y+my))
                 self.Refresh()  # Triggers EVT_PAINT on panel
         event.Skip()
 # ------------------------------------------------------------------------------
@@ -309,7 +320,7 @@ class MainFrame(wx.Frame):
     def __init__(self):
         wx.Frame.__init__(self, None, 
                                 title="Graph by Borden 1.01", 
-                                size=(1000, 1500))
+                                size=(1000, 1000))
         panel = PlotPanel(self)
         self.Centre()
         self.Show()
