@@ -13,7 +13,7 @@
 # ==============================================================================
 
 import wx
-from random import sample
+from random import sample, randint
 from copy import deepcopy
 from math import sin, cos, radians
 
@@ -48,7 +48,8 @@ class PlotPanel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         self.k = 300.0   # Temp
-        self.edges_array = []
+        self.epv_array = []
+        self.edges_label_array = []
         self.vertices_list = []
         self.down = False
         self.draw = False
@@ -82,17 +83,16 @@ class PlotPanel(wx.Panel):
 # DESIGN -----------------------------------------------------------------------
     def InitUI(self):
         self.label1 = wx.StaticText(self,label="Input List of Edges",pos=(10,10))
-        self.label1_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.BOLD)
-        self.label1.SetFont(self.label1_font)
-        self.text = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER, 
-                                      pos=(10, 40), 
-                                      size=(275,- 1))
-        self.text.SetFocus()
+        self.attr_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.BOLD)
+        self.label1.SetFont(self.attr_font)
+        self.input_textbox = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER, 
+                                               pos=(10, 40), 
+                                               size=(275,- 1))
+        self.input_textbox.SetFocus()
         
         self.label2 = wx.StaticText(self, label="Vertex Label Options", 
                                           pos=(10,80))
-        self.label2_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.BOLD)
-        self.label2.SetFont(self.label2_font)
+        self.label2.SetFont(self.attr_font)
         self.radio1 = wx.RadioButton(self, label="Uppercase Letters (ABC)", 
                                            pos=(10,110),
                                            style=wx.RB_GROUP)
@@ -101,11 +101,16 @@ class PlotPanel(wx.Panel):
         self.radio3 = wx.RadioButton(self, label="Integers (123)", pos=(10,170))
         
         self.label3 = wx.StaticText(self, label="Redrawing Graph", pos=(10,205))
-        self.label3_font = wx.Font(11, wx.MODERN, wx.NORMAL, wx.BOLD)
-        self.label3.SetFont(self.label3_font)
+        self.label3.SetFont(self.attr_font)
         self.radio4 = wx.RadioButton(self, label="Keep Layout", pos=(10,235),
                                            style=wx.RB_GROUP)
         self.radio5 = wx.RadioButton(self, label="Reset Layout", pos=(10,265))
+        
+        self.label4 = wx.StaticText(self, label="Graph Shape", pos=(10,300))
+        self.label4.SetFont(self.attr_font)
+        self.radio6 = wx.RadioButton(self, label="Circular", pos=(10,330),
+                                           style=wx.RB_GROUP)
+        self.radio7 = wx.RadioButton(self, label="Random", pos=(10,360))
         
         self.error_title = wx.StaticText(self, wx.ID_ANY, 
                                          label=self.error_title_label, 
@@ -122,8 +127,8 @@ class PlotPanel(wx.Panel):
         self.error_body.SetFont(self.error_body_font)
         self.error_body.Hide()
         
-        self.Bind(wx.EVT_TEXT_ENTER, self.onEnter, self.text) 
-        self.Bind(wx.EVT_TEXT_ENTER, self.onDrawEdges)
+        self.Bind(wx.EVT_TEXT_ENTER, self.onEnter, self.input_textbox) 
+        #self.Bind(wx.EVT_TEXT_ENTER, self.onDrawEdges)
         self.Bind(wx.EVT_RADIOBUTTON, self.onRadioButton)
         self.Bind(wx.EVT_MOTION, self.onMove)
         self.Bind(wx.EVT_PAINT, self.onDrawEdges)
@@ -192,16 +197,23 @@ class PlotPanel(wx.Panel):
             if self.radio5.GetValue() or not self.same_input:
                 v_lbl = self.labelMaker(i)
                 theta = -(radians((360.0/self.n)*i))
-                x = (0.0)*cos(theta)-(self.k)*sin(theta)+(500)-35
-                y = -((self.k)*cos(theta)+(0.0)*sin(theta))+(500)
-                vertex = Vertex(parent=self, edges=self.edges_array[i], 
+                if self.radio6.GetValue():
+                    x = (0.0)*cos(theta)-(self.k)*sin(theta)+(500)-35
+                    y = -((self.k)*cos(theta)+(0.0)*sin(theta))+(500)
+                else:
+                    y = randint(50, 900)
+                    if y > 500:
+                        x = randint(50, 900)
+                    else:
+                        x = randint(250, 900)
+                vertex = Vertex(parent=self, edges=self.epv_array[i], 
                                 label=v_lbl, pos=[x,y])
                 vertex.button.Bind(wx.EVT_BUTTON, self.onButton)
                 vertex.button.Bind(wx.EVT_MOTION, self.onMove)
                 self.vertices_list.append(vertex)
             else:
                 self.vertices_list[i].adjacency_list = []
-                self.vertices_list[i].edges = self.edges_array[i]
+                self.vertices_list[i].edges = self.epv_array[i]
  
     def printVerticesPos(self):
         for vertex in self.vertices_list:
@@ -235,6 +247,42 @@ class PlotPanel(wx.Panel):
             v_list = sample(v_list, len(v_list))
             v_list = sorted(v_list, key=lambda v: v.edges, reverse=True)
             self.print_v_list(v_list)
+    
+    def MakeSet(self, edges_array):
+        buff_list = []
+        for i, edge in enumerate(edges_array):
+            buff_list.append(set(self.vertices_list[i].label))
+        return buff_list
+        
+    def FindSet(self, edge, edge_array):
+        for i, e in enumerate(edge_array):
+            if edge in e:
+                return i
+                
+    def UnionSet(self, i, j, edge_array):
+        edge_array[j] = edge_array[i].union(edge_array[j])
+        del edge_array[i]
+        return edge_array
+        
+    def CountSet(self, edge_array):
+        count_set = []
+        for e_set in edge_array:
+            count_set.append(len(e_set))
+        return count_set
+        
+    
+    def createSet(self, edges_array):
+        edge_array = self.MakeSet(edges_array)
+        for edge in edges_array:
+            for e, _ in enumerate(edge[:-1:]):
+                i = self.FindSet(edge[e], edge_array)
+                j = self.FindSet(edge[e+1], edge_array)
+                if i is not j:
+                    edge_array = self.UnionSet(i, j, edge_array)
+        print "edge_array = ", edge_array
+        count_set = self.CountSet(edge_array)
+        print "count_set = ", sorted(count_set, reverse=True)
+        
         
             
 # ------------------------------------------------------------------------------
@@ -242,43 +290,69 @@ class PlotPanel(wx.Panel):
 # EVENTS -----------------------------------------------------------------------
     def onEnter(self, event):
         self.draw = True
-        self.input_text = self.text.GetValue()
-        if self.radio5.GetValue() or map(int, self.input_text.split()) != self.edges_array:
+        input_text = self.input_textbox.GetValue()
+        if self.radio5.GetValue() or \
+           map(int, input_text.split()) != self.epv_array:
             self.destroyButtons()
             self.vertices_list = []
-            self.edges_array = []
-            self.edges_array = map(int, self.input_text.split())
+            self.epv_array = []
+            self.epv_array = map(int, input_text.split())
             self.same_input = False
-            self.n = len(self.edges_array)
+            self.n = len(self.epv_array)
         else:
             self.same_input = True
-        if self.Graphic(self.edges_array):   # GRAPHIC /\/\/\/\/\/\/\/\/\/\/\/\
+        if self.Graphic(self.epv_array):   # GRAPHIC /\/\/\/\/\/\/\/\/\/\/\/\
             self.placeVertices()
             self.printVerticesPos()
             self.createAdjacencyList()
+        self.input_textbox.SetFocus()
+        self.input_textbox.SetInsertionPointEnd()
         self.Refresh()
+        event.Skip()
     
     def onDrawEdges(self, event):
         button = event.GetEventObject()
-        if self.draw and len(button.GetLabel()) < 4:
+        self.edges_label_array = []
+        #                                4 Linux, 6 Windows <<INVESTIGAGE>>>
+        if self.draw and len(button.GetLabel()) < 6:    
             self.dc = wx.PaintDC(event.GetEventObject())
             self.dc.Clear()
             black_pen = wx.Pen(wx.Colour(0,0,0), 3) 
             self.dc.SetPen(black_pen)
             for v1, vertex1 in enumerate(self.vertices_list):
                 v1_x, v1_y = vertex1.getPosition()
-                print vertex1.button.GetLabel()
+                v1_lbl = vertex1.button.GetLabel()
+                print v1_lbl
                 for vertex2 in self.vertices_list[v1].adjacency_list:
                     v2_x, v2_y = vertex2.getPosition()
-                    print "-- ", vertex2.button.GetLabel()
-                    self.dc.DrawLine(v1_x+30, v1_y+25, v2_x+30, v2_y+25)
+                    v2_lbl = vertex2.button.GetLabel()
+                    tpl = (v1_lbl, v2_lbl)
+                    if tpl not in self.edges_label_array and \
+                        tpl[::-1] not in self.edges_label_array:
+                        self.edges_label_array.append(tpl)
+                        print "-- ", v2_lbl
+                        self.dc.DrawLine(v1_x+30, v1_y+25, v2_x+30, v2_y+25)
+            for i, edge in enumerate(self.edges_label_array):
+                print "Edge ", i, " = ", "(", edge[0], ", ", edge[1], ")"
+            self.createSet(self.edges_label_array)
         event.Skip()
     
     def onRadioButton(self, event):
-        for i, vertex in enumerate(self.vertices_list):
-            v_lbl = self.labelMaker(i)
-            vertex.button.SetLabel(v_lbl)
-            vertex.label = v_lbl
+        rb = event.GetEventObject()
+        rb_lbl = rb.GetLabel() 
+        if rb_lbl == self.radio1.GetLabel() or \
+           rb_lbl == self.radio2.GetLabel() or \
+           rb_lbl == self.radio3.GetLabel(): 
+            for i, vertex in enumerate(self.vertices_list):
+                v_lbl = self.labelMaker(i)
+                vertex.button.SetLabel(v_lbl)
+                vertex.label = v_lbl
+        elif rb_lbl == self.radio6.GetLabel() or \
+             rb_lbl == self.radio7.GetLabel():
+            self.radio5.SetValue(True)
+        self.input_textbox.SetFocus()
+        self.input_textbox.SetInsertionPointEnd()
+        event.Skip()
 
     def onButton(self, event):
         print("Click")
@@ -293,6 +367,8 @@ class PlotPanel(wx.Panel):
         else:
             self.down = True
             print("Down is True")
+        self.input_textbox.SetFocus()
+        self.input_textbox.SetInsertionPointEnd()
         event.Skip()
 
     def onMove(self, event):
@@ -302,15 +378,18 @@ class PlotPanel(wx.Panel):
             if lbl == self.clicked_button and len(lbl) < 4:
                 mx, my = wx.GetMousePosition()
                 print("%i, %i" % (self.button._x+mx, self.button._y+my))
-                button.SetPosition(wx.Point(self.button._x+mx, self.button._y+my))
+                button.SetPosition(wx.Point(self.button._x+mx, 
+                                            self.button._y+my))
                 self.Refresh()  # Triggers EVT_PAINT on panel
             else:
-                v_btn = [v for v in self.vertices_list if v.button.GetLabel() == self.clicked_button]
+                v_btn = [v for v in self.vertices_list \
+                               if v.button.GetLabel() == self.clicked_button]
                 print "vbtn = ", v_btn[0].button.GetLabel()
                 vbtn = v_btn[0]
                 mx, my = wx.GetMousePosition()
                 print("%i, %i" % (vbtn.button._x+mx, vbtn.button._y+my))
-                vbtn.button.SetPosition(wx.Point(vbtn.button._x+mx, vbtn.button._y+my))
+                vbtn.button.SetPosition(wx.Point(vbtn.button._x+mx, 
+                                                 vbtn.button._y+my))
                 self.Refresh()  # Triggers EVT_PAINT on panel
         event.Skip()
 # ------------------------------------------------------------------------------
