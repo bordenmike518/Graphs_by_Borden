@@ -148,25 +148,19 @@ class PlotPanel(wx.Panel):
     def Graphic(self, arr):
         s = deepcopy(arr)
         first = s[0]
-        if first == 0:                      # Observation I
+        # Observation I
+        if first == 0:  # If reducable to Null, then graph, else show() error.
             self.error_title.Hide()
             self.error_body.Hide()
             return True
-        elif first >= self.n:               # Observation II
-            self.error_title.Show()
-            self.error_body.Show()
-            return False
-        elif s[first] == 0:                 # Observation III
-            self.error_title.Show()
-            self.error_body.Show()
-            return False
-        elif sum(s) % 2 == 1:               # Sum(di) != 0 ; for i in range(n)
+        # Observation II, III, Sum(di) != 0 ; for i in range(n)
+        elif first >= self.n or s[first] == 0 or sum(s) % 2 == 1:               
             self.error_title.Show()
             self.error_body.Show()
             return False
         else:
             s = self.func(s)
-            return self.Graphic(s)
+            return self.Graphic(s)  # Recursive
 #-------------------------------------------------------------------------------
 
 # ASSISTING FUNCTIONS ----------------------------------------------------------
@@ -301,7 +295,7 @@ class PlotPanel(wx.Panel):
             self.n = len(self.epv_array)
         else:
             self.same_input = True
-        if self.Graphic(self.epv_array):   # GRAPHIC /\/\/\/\/\/\/\/\/\/\/\/\
+        if self.Graphic(self.epv_array):   # GRAPHIC test!
             self.placeVertices()
             self.printVerticesPos()
             self.createAdjacencyList()
@@ -394,7 +388,7 @@ class PlotPanel(wx.Panel):
         event.Skip()
 # ------------------------------------------------------------------------------
 
-# MAINLOOP ---------------------------------------------------------------------
+# Main ---------------------------------------------------------------------
 class MainFrame(wx.Frame):
     def __init__(self):
         wx.Frame.__init__(self, None, 
@@ -405,6 +399,7 @@ class MainFrame(wx.Frame):
         self.Show()
 
 if __name__ == "__main__":
+    print("Starting Graphs by Borden")
     app = wx.App(False)
     frame = MainFrame()
     app.MainLoop()
